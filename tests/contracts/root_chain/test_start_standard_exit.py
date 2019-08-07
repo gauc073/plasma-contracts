@@ -171,7 +171,7 @@ def test_start_standard_exit_on_in_flight_exit_output_should_block_future_piggyb
 
     blknum, txindex, _ = decode_utxo_id(spend_id)
     output_id = encode_utxo_id(blknum, txindex, output_index)
-    testlang.start_standard_exit(output_id, key=testlang.accounts[output_index].key)
+    testlang.start_standard_exit(output_id, account=testlang.accounts[output_index].key)
 
     with pytest.raises(TransactionFailed):
         testlang.piggyback_in_flight_exit_output(spend_id, output_index, testlang.accounts[output_index].key)
@@ -200,12 +200,12 @@ def test_start_standard_exit_on_finalized_in_flight_exit_output_should_fail(test
     # all not finalized outputs can exit via SE
     for i in range(output_index):
         output_id = encode_utxo_id(blknum, txindex, i)
-        testlang.start_standard_exit(output_id, key=owner.key)
+        testlang.start_standard_exit(output_id, account=owner.key)
 
     # an already finalized output __cannot__ exit via SE
     with pytest.raises(TransactionFailed):
         output_id = encode_utxo_id(blknum, txindex, output_index)
-        testlang.start_standard_exit(output_id, key=owner.key)
+        testlang.start_standard_exit(output_id, account=owner.key)
 
 
 def test_start_standard_exit_from_two_deposits_with_the_same_amount_and_owner_should_succeed(testlang):

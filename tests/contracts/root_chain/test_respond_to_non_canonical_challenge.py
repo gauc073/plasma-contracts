@@ -11,7 +11,7 @@ def test_respond_to_non_canonical_challenge_should_succeed(testlang, period):
     spend_id = testlang.spend_utxo([deposit_id], [owner_1.key])
     double_spend_id = testlang.spend_utxo([deposit_id], [owner_1.key], [(owner_1.address, NULL_ADDRESS, 100)], force_invalid=True)
     testlang.start_in_flight_exit(spend_id)
-    testlang.challenge_in_flight_exit_not_canonical(spend_id, double_spend_id, key=owner_2.key)
+    testlang.challenge_in_flight_exit_not_canonical(spend_id, double_spend_id, account=owner_2.key)
 
     testlang.forward_to_period(period)
 
@@ -29,7 +29,7 @@ def test_respond_to_non_canonical_challenge_not_older_should_fail(testlang):
     double_spend_id = testlang.spend_utxo([deposit_id], [owner_1.key], [(owner_1.address, NULL_ADDRESS, 100)], force_invalid=True)
     spend_id = testlang.spend_utxo([deposit_id], [owner_1.key])
     testlang.start_in_flight_exit(spend_id)
-    testlang.challenge_in_flight_exit_not_canonical(spend_id, double_spend_id, key=owner_2.key)
+    testlang.challenge_in_flight_exit_not_canonical(spend_id, double_spend_id, account=owner_2.key)
 
     testlang.forward_to_period(2)
 
@@ -43,7 +43,7 @@ def test_respond_to_non_canonical_challenge_invalid_proof_should_fail(testlang):
     spend_id = testlang.spend_utxo([deposit_id], [owner_1.key])
     double_spend_id = testlang.spend_utxo([deposit_id], [owner_1.key], [(owner_1.address, NULL_ADDRESS, 100)], force_invalid=True)
     testlang.start_in_flight_exit(spend_id)
-    testlang.challenge_in_flight_exit_not_canonical(spend_id, double_spend_id, key=owner_2.key)
+    testlang.challenge_in_flight_exit_not_canonical(spend_id, double_spend_id, account=owner_2.key)
 
     testlang.forward_to_period(2)
 
@@ -69,4 +69,4 @@ def test_respond_to_not_canonical_challenge_with_inputs_spent_should_fail(testla
 
     # Since IFE can be exited only from inputs, no further canonicity game required
     with pytest.raises(TransactionFailed):
-        testlang.challenge_in_flight_exit_not_canonical(spend_id, double_spend_id, key=owner_2.key)
+        testlang.challenge_in_flight_exit_not_canonical(spend_id, double_spend_id, account=owner_2.key)

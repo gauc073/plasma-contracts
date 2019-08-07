@@ -4,6 +4,8 @@ from plasma_core.constants import NULL_ADDRESS, NULL_ADDRESS_HEX, MIN_EXIT_PERIO
 
 # TODO: test if fee exit generates events
 
+pytestmark = pytest.mark.skip()
+
 
 def test_start_fee_exit_should_succeed(testlang):
     operator, amount = testlang.accounts[0], 100
