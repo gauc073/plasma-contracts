@@ -122,4 +122,3 @@ def _deposit(testlang, owner, amount, blknum):
     block = Block([deposit_tx], number=blknum)
     testlang.child_chain.add_block(block)
     return deposit_id,
-

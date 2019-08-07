@@ -1,16 +1,16 @@
 import os
-import pytest
-from eth_tester.exceptions import TransactionFailed
 
-from web3 import Web3, EthereumTesterProvider
+import pytest
 from eth_tester import EthereumTester, PyEVMBackend
+from eth_tester.exceptions import TransactionFailed
 from solc_simple import Builder
+from solcx import link_code
+from web3 import Web3, EthereumTesterProvider
 from web3.contract import Contract
 
 from plasma_core.account import EthereumAccount
 from plasma_core.utils.deployer import Deployer
 from testlang.testlang import TestingLanguage
-from solcx import link_code
 
 EXIT_PERIOD = 4 * 60  # 4 minutes
 
