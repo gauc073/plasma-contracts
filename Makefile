@@ -3,10 +3,11 @@ init:
 
 .PHONY: help
 help:
-	@echo "clean - remove build artifacts"
-	@echo "lint  - check style with flake8"
-	@echo "test  - runs tests with pytest"
-	@echo "dev   - installs dev dependencies"
+	@echo "clean            - remove build artifacts"
+	@echo "lint             - check style with flake8"
+	@echo "test             - runs tests with pytest"
+	@echo "dev              - installs dev dependencies"
+	@echo "test-parallel    - run tests in parallel (uses all available cores)"
 
 .PHONY: clean
 clean: clean-build clean-pyc
@@ -35,7 +36,7 @@ test:
 
 .PHONY: conctest
 conctest:
-	python -W ignore::DeprecationWarning -m pytest --concmode=mproc
+	python -W ignore::DeprecationWarning -m pytest -n `nproc`
 	rm -fr .pytest_cache
 
 .PHONY: runslow

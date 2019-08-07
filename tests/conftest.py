@@ -2,14 +2,13 @@ import os
 
 import pytest
 from eth_tester import EthereumTester, PyEVMBackend
-from eth_tester.exceptions import TransactionFailed
 from solc_simple import Builder
 from solcx import link_code
 from web3 import Web3, EthereumTesterProvider
-from web3.contract import Contract
 
 from plasma_core.account import EthereumAccount
 from plasma_core.utils.deployer import Deployer
+from tests.contract_wrapper import ConvenienceContractWrapper
 from testlang.testlang import TestingLanguage
 
 EXIT_PERIOD = 4 * 60  # 4 minutes
@@ -70,45 +69,6 @@ def w3(tester, accounts) -> Web3:
 #
 
 
-class ContractConvenienceWrapper:
-    default_params = {'gas': START_GAS}
-
-    def __init__(self, contract: Contract):
-        self.contract = contract
-
-    def __getattr__(self, item):
-        method = self._find_abi_method(item)
-        if method:
-            function = self.contract.functions.__getattribute__(item)
-            return ContractConvenienceWrapper._call_or_transact(function, method)
-
-        return self.contract.__getattribute__(item)
-
-    def _find_abi_method(self, item):
-        for i in self.contract.abi:
-            if i['type'] == 'function' and i['name'] == item:
-                return i
-
-    @staticmethod
-    def _call_or_transact(function, method_abi):
-        def _do_call(*args):
-            return function(*args).call()
-
-        def _do_transact(*args, **kwargs):
-            # params = {**ContractConvenienceWrapper.default_params, **kwargs}
-            tx_hash = function(*args).transact(kwargs)
-
-            if function.web3.eth.getTransactionReceipt(tx_hash).status == 0:
-                raise TransactionFailed
-
-            return tx_hash
-
-        if method_abi['constant']:
-            return _do_call
-        else:
-            return _do_transact
-
-
 @pytest.fixture
 def get_contract(w3, deployer):
     def create_contract(path, args=(), sender=w3.eth.accounts[0], libraries=None):
@@ -122,7 +82,7 @@ def get_contract(w3, deployer):
         tx_hash = Contract.constructor(*args).transact({'gas': START_GAS})
         tx_receipt = w3.eth.waitForTransactionReceipt(tx_hash)
         contract = w3.eth.contract(abi=abi, address=tx_receipt.contractAddress)
-        return ContractConvenienceWrapper(contract)
+        return ConvenienceContractWrapper(contract)
 
     return create_contract
 
@@ -159,12 +119,12 @@ def root_chain_short_exit_period(get_contract):
 def testlang_root_chain_short_exit_period(root_chain_short_exit_period, w3, accounts):
     return TestingLanguage(root_chain_short_exit_period, w3, accounts)
 
-#
-# @pytest.fixture
-# def utxo(testlang):
-#     return testlang.create_utxo()
-#
-#
+
+@pytest.fixture
+def utxo(testlang):
+    return testlang.create_utxo()
+
+
 # def watch_contract(ethtester, path, address):
 #     abi, _ = deployer.builder.get_contract_data(path)
 #     return ethtester.ABIContract(ethtester.chain, abi, address)

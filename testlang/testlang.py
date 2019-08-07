@@ -238,7 +238,7 @@ class TestingLanguage(object):
         else:
             deposit_id = self.deposit_token(owner, token, amount)
             token_address = token.address
-        spend_id = self.spend_utxo([deposit_id], [owner.key], [(owner.address, token_address, 100)])
+        spend_id = self.spend_utxo([deposit_id], [owner], [(owner.address, token_address, 100)])
         spend = self.child_chain.get_transaction(spend_id)
         return Utxo(deposit_id, owner, token_address, amount, spend, spend_id)
 
