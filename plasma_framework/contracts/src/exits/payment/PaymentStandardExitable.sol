@@ -69,15 +69,14 @@ contract PaymentStandardExitable is
 
     /**
      * @notice input args data for challengeStandardExit.
-     * @param _exitId Identifier of the standard exit to challenge.
-     * @param _outputType The output type of the exiting output.
-     * @param _outputUtxoPos The utxo position of the exiting output.
-     * @param _outputId The unique id of exiting output.
-     * @param _outputGuardData (optional) The output guard data of the output. Could be empty when output type is 0.
-     * @param _challengeTxType The tx type of the challenge transaction.
-     * @param _challengeTx RLP encoded transaction that spends the exiting output.
-     * @param _inputIndex Which input of the challenging tx corresponds to the exiting output.
-     * @param _witness Witness data that can prove the exiting output is spent.
+     * @param exitId Identifier of the standard exit to challenge.
+     * @param outputType The output type of the exiting output.
+     * @param outputUtxoPos The utxo position of the exiting output.
+     * @param outputId The unique id of exiting output.
+     * @param challengeTxType The tx type of the challenge transaction.
+     * @param challengeTx RLP encoded transaction that spends the exiting output.
+     * @param inputIndex Which input of the challenging tx corresponds to the exiting output.
+     * @param witness Witness data that can prove the exiting output is spent.
      */
     struct ChallengeStandardExitArgs {
         uint192 exitId;

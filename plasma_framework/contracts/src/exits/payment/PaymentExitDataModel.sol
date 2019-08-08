@@ -21,6 +21,12 @@ library PaymentExitDataModel {
         uint256 amount;
     }
 
+    struct WithdrawData {
+        address payable exitTarget;
+        address token;
+        uint256 amount;
+    }
+
     struct InFlightExit {
         uint256 exitStartTimestamp;
         // exit map stores piggybacks and finalized exits
@@ -31,8 +37,8 @@ library PaymentExitDataModel {
         // output is exited only when 3 * MAX_INPUTS + output number bit is set
         uint256 exitMap;
         uint256 position;
-        PaymentOutputModel.Output[MAX_INPUT_NUM] inputs;
-        PaymentOutputModel.Output[MAX_OUTPUT_NUM] outputs;
+        WithdrawData[MAX_INPUT_NUM] inputs;;
+        WithdrawData[MAX_OUTPUT_NUM] outputs;
         address payable bondOwner;
         uint256 oldestCompetitorPosition;
     }

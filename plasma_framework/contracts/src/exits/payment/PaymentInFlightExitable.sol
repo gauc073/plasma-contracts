@@ -67,7 +67,6 @@ contract PaymentInFlightExitable is
      * @param inFlightTx Decoded in-flight transaction.
      * @param inFlightTxHash Hash of in-flight transaction.
      * @param inputTxsRaw Input transactions as bytes.
-     * @param inputTxs Decoded input transactions.
      * @param inputUtxosPos Postions of input utxos.
      * @param inputUtxosTypes Types of outputs that make in-flight transaction inputs.
      * @param inputTxsInclusionProofs Merkle proofs for input transactions.
@@ -80,7 +79,6 @@ contract PaymentInFlightExitable is
         PaymentTransactionModel.Transaction inFlightTx;
         bytes32 inFlightTxHash;
         bytes[] inputTxsRaw;
-        PaymentTransactionModel.Transaction[] inputTxs;
         UtxoPosLib.UtxoPos[] inputUtxosPos;
         uint256[] inputUtxosTypes;
         bytes[] inputTxsInclusionProofs;
@@ -115,7 +113,6 @@ contract PaymentInFlightExitable is
         exitData.inFlightTx = PaymentTransactionModel.decode(args.inFlightTx);
         exitData.inFlightTxHash = keccak256(args.inFlightTx);
         exitData.inputTxsRaw = args.inputTxs;
-        exitData.inputTxs = decodeInputTxs(exitData.inputTxsRaw);
         exitData.inputUtxosPos = decodeInputTxsPositions(args.inputUtxosPos);
         exitData.inputUtxosTypes = args.inputUtxosTypes;
         exitData.inputTxsInclusionProofs = args.inputTxsInclusionProofs;
@@ -132,14 +129,6 @@ contract PaymentInFlightExitable is
             utxosPos[i] = UtxoPosLib.UtxoPos(inputUtxosPos[i]);
         }
         return utxosPos;
-    }
-
-    function decodeInputTxs(bytes[] memory inputTxsRaw) private pure returns (PaymentTransactionModel.Transaction[] memory) {
-        PaymentTransactionModel.Transaction[] memory inputTxs = new PaymentTransactionModel.Transaction[](inputTxsRaw.length);
-        for (uint i = 0; i < inputTxsRaw.length; i++) {
-            inputTxs[i] = PaymentTransactionModel.decode(inputTxsRaw[i]);
-        }
-        return inputTxs;
     }
 
     function getOutputIds(bytes[] memory inputTxs, UtxoPosLib.UtxoPos[] memory utxoPos) private view returns (bytes32[] memory) {
@@ -220,7 +209,7 @@ contract PaymentInFlightExitable is
     function verifyInputsSpendingCondition(StartExitData memory exitData) private view {
         for (uint i = 0; i < exitData.inputTxs.length; i++) {
             uint16 outputIndex = exitData.inputUtxosPos[i].outputIndex();
-            bytes32 outputGuard = exitData.inputTxs[i].outputs[outputIndex].outputGuard;
+            //    bytes32 outputGuard = exitData.inputTxs[i].outputs[outputIndex].outputGuard;
 
             //FIXME: consider moving spending conditions to PlasmaFramework
             IPaymentSpendingCondition condition = PaymentSpendingConditionRegistry.spendingConditions(
