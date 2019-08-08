@@ -4,9 +4,12 @@ pragma experimental ABIEncoderV2;
 import "./PaymentExitDataModel.sol";
 import "./spendingConditions/IPaymentSpendingCondition.sol";
 import "./spendingConditions/PaymentSpendingConditionRegistry.sol";
+import "../IOutputGuardParser.sol";
+import "../OutputGuardParserRegistry.sol";
 import "../utils/ExitId.sol";
 import "../utils/ExitableTimestamp.sol";
 import "../utils/OutputId.sol";
+import "../utils/OutputGuard.sol";
 import "../../framework/PlasmaFramework.sol";
 import "../../framework/interfaces/IExitProcessor.sol";
 import "../../utils/Bits.sol";
@@ -20,6 +23,7 @@ import "../../transactions/outputs/PaymentOutputModel.sol";
 contract PaymentInFlightExitable is
     IExitProcessor,
     OnlyWithValue,
+    OutputGuardParserRegistry,
     PaymentSpendingConditionRegistry
 {
     using ExitableTimestamp for ExitableTimestamp.Calculator;
@@ -28,18 +32,30 @@ contract PaymentInFlightExitable is
     using RLP for bytes;
     using RLP for RLP.RLPItem;
     using UtxoPosLib for UtxoPosLib.UtxoPos;
+    using PaymentExitDataModel for PaymentExitDataModel.InFlightExit;
 
     uint8 constant public MAX_INPUT_NUM = 4;
+    uint8 constant public MAX_OUTPUT_NUM = 4;
     uint256 public constant IN_FLIGHT_EXIT_BOND = 31415926535 wei;
+    uint256 public PIGGYBACK_BOND = 31415926535 wei;
+
     mapping (uint192 => PaymentExitDataModel.InFlightExit) public inFlightExits;
 
     PlasmaFramework private framework;
     IsDeposit.Predicate private isDeposit;
     ExitableTimestamp.Calculator private exitableTimestampCalculator;
+    uint256 private minExitPeriod;
 
     event InFlightExitStarted(
         address indexed initiator,
         bytes32 txHash
+    );
+
+    event InFlightExitPiggybacked(
+        address indexed owner,
+        bytes32 txHash,
+        uint16 index,
+        bool isInput
     );
 
     /**
@@ -92,6 +108,7 @@ contract PaymentInFlightExitable is
         framework = _framework;
         isDeposit = IsDeposit.Predicate(framework.CHILD_BLOCK_INTERVAL());
         exitableTimestampCalculator = ExitableTimestamp.Calculator(framework.minExitPeriod());
+        minExitPeriod = framework.minExitPeriod();
     }
 
     /**
@@ -106,6 +123,85 @@ contract PaymentInFlightExitable is
         verifyStart(startExitData);
         startExit(startExitData);
         emit InFlightExitStarted(msg.sender, startExitData.inFlightTxHash);
+    }
+
+    /**
+     * @notice Allows a user to piggyback onto an in-flight transaction.
+     * @dev requires the exiting UTXO's token to be added via `addToken`
+     * @param _inFlightTx RLP encoded in-flight transaction.
+     * @param _outputType Specific type of the output.
+     * @param _outputGuardData (Optional) Output guard data if the output type is not 0.
+     * @param _index Index of the input/output to piggyback.
+     * @param _isInput To determine this is an action of piggyback on transaction input or output.
+     */
+    function piggybackInFlightExit(
+        bytes calldata _inFlightTx,
+        uint256 _outputType,
+        bytes calldata _outputGuardData,
+        uint16 _index,
+        bool _isInput
+    )
+        external
+        payable
+        onlyWithValue(PIGGYBACK_BOND)
+    {
+        if (_isInput) {
+            require(_index < MAX_INPUT_NUM, "Index exceed max size of input");
+        } else {
+            require(_index < MAX_OUTPUT_NUM, "Index exceed max size of output");
+        }
+
+        uint192 exitId = ExitId.getInFlightExitId(_inFlightTx);
+        PaymentExitDataModel.InFlightExit storage exit = inFlightExits[exitId];
+
+        require(exit.exitStartTimestamp != 0, "No inflight exit to piggyback on");
+        require(exit.isInFirstPhase(minExitPeriod), "Can only piggyback in first phase of exit period");
+        require(!exit.isPiggybacked(_index, _isInput), "The indexed input/output has been piggybacked already");
+
+        PaymentExitDataModel.WithdrawData memory withdrawData;
+        if (_isInput) {
+            withdrawData = exit.inputs[_index];
+            require(withdrawData.exitTarget == msg.sender, "Can be called by the exit target of input only");
+        } else {
+            PaymentOutputModel.Output memory output = PaymentTransactionModel.decode(_inFlightTx).outputs[_index];
+            address payable exitTarget;
+            if (_outputType == 0) {
+                exitTarget = output.owner();
+            } else {
+                require(
+                    OutputGuard.build(_outputType, _outputGuardData) == output.outputGuard,
+                    "Output guard data and output type from args mismatch with the outputguard in output"
+                );
+
+                IOutputGuardParser outputGuardParser = OutputGuardParserRegistry.outputGuardParsers(_outputType);
+                require(address(outputGuardParser) != address(0), "Does not have outputGuardParser for the output type");
+
+                exitTarget = outputGuardParser.parseExitTarget(_outputGuardData);
+            }
+            withdrawData = PaymentExitDataModel.WithdrawData({
+                exitTarget: exitTarget,
+                token: output.token,
+                amount: output.amount
+            });
+
+            require(withdrawData.exitTarget == msg.sender, "Can be called by the exit target of output only");
+
+            // output is set on piggyback to save some gas as output is always together with tx
+            exit.outputs[_index] = withdrawData;
+        }
+
+        if (exit.isFirstPiggybackOfTheToken(withdrawData.token)) {
+            UtxoPosLib.UtxoPos memory utxoPos = UtxoPosLib.UtxoPos(exit.position);
+            (, uint256 blockTimestamp) = framework.blocks(utxoPos.blockNum());
+            bool isPositionDeposit = isDeposit.test(utxoPos.blockNum());
+            uint64 exitableAt = exitableTimestampCalculator.calculate(now, blockTimestamp, isPositionDeposit);
+
+            framework.enqueue(withdrawData.token, exitableAt, utxoPos.txPos(), exitId, this);
+        }
+
+        exit.setPiggybacked(_index, _isInput);
+
+        emit InFlightExitPiggybacked(msg.sender, keccak256(_inFlightTx), _index, _isInput);
     }
 
     function createStartExitData(StartExitArgs memory args) private view returns (StartExitData memory) {
@@ -166,11 +262,7 @@ contract PaymentInFlightExitable is
     function verifyExitNotStarted(uint192 exitId) private view {
         PaymentExitDataModel.InFlightExit storage exit = inFlightExits[exitId];
         require(exit.exitStartTimestamp == 0, "There is an active in-flight exit from this transaction");
-        require(!isFinalized(exit), "This in-flight exit has already been finalized");
-    }
-
-    function isFinalized(PaymentExitDataModel.InFlightExit storage ife) private view returns (bool) {
-        return Bits.bitSet(ife.exitMap, 255);
+        require(!exit.isFinalized(), "This in-flight exit has already been finalized");
     }
 
     function verifyNumberOfInputsMatchesNumberOfInFlightTransactionInputs(StartExitData memory exitData) private pure {
@@ -307,7 +399,10 @@ contract PaymentInFlightExitable is
     {
         for (uint i = 0; i < inputTxs.length; i++) {
             uint16 outputIndex = inputUtxosPos[i].outputIndex();
-            ife.inputs[i] = inputTxs[i].outputs[outputIndex];
+            PaymentOutputModel.Output memory output = inputTxs[i].outputs[outputIndex];
+            ife.inputs[i].exitTarget = output.owner();
+            ife.inputs[i].token = output.token;
+            ife.inputs[i].amount = output.amount;
         }
     }
 }
